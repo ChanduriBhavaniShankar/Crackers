@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Study Tracker</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Google APIs for boilerplate -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/api.js"></script>
+
+    <!-- Configure Tailwind to match the custom classes in your snippet (shadcn/ui style) -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        background: 'hsl(var(--background))',
+                        foreground: 'hsl(var(--foreground))',
+                        card: 'hsl(var(--card))',
+                        'card-foreground': 'hsl(var(--card-foreground))',
+                        primary: 'hsl(var(--primary))',
+                        'primary-foreground': 'hsl(var(--primary-foreground))',
+                        muted: 'hsl(var(--muted))',
+                        'muted-foreground': 'hsl(var(--muted-foreground))',
+                        border: 'hsl(var(--border))',
+                        ring: 'hsl(var(--ring))',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --background: 0 0% 100%;
+            --foreground: 222.2 84% 4.9%;
+            --card: 0 0% 100%;
+            --card-foreground: 222.2 84% 4.9%;
+            --primary: 222.2 47.4% 11.2%;
+            --primary-foreground: 210 40% 98%;
+            --muted: 210 40% 96.1%;
+            --muted-foreground: 215.4 16.3% 46.9%;
+            --border: 214.3 31.8% 91.4%;
+            --ring: 222.2 84% 4.9%;
+            --radius: 0.5rem;
+        }
+        body {
+            background-color: hsl(var(--background));
+            color: hsl(var(--foreground));
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50 p-6">
+
+    <header class="max-w-4xl mx-auto mb-8 flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Study Tracker</h1>
+            <p class="text-sm text-gray-500">Live monitoring for the study group</p>
+        </div>
+        <div>
+            <!-- Google Sign-In Button Placeholder -->
+            <button id="auth-button" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring bg-blue-600 text-white hover:bg-blue-700 h-9 px-4 py-2 gap-2 shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-google" viewBox="0 0 16 16">
+                    <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.304a4.792 4.792 0 0 0 0 3.063h.003c.635 1.893 2.405 3.301 4.492 3.301 1.078 0 2.004-.276 2.722-.764h-.003a3.702 3.702 0 0 0 1.599-2.431H8v-3.08h7.545z"/>
+                </svg>
+                Sign In with Google
+            </button>
+            <p id="auth-status" class="text-xs text-center text-muted-foreground mt-1 hidden">Authenticated</p>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4" id="tracker-container">
+        <!-- Cards will be injected here via JS -->
+    </main>
+
+    <script>
+        const users = ['Venky', 'Ramu', 'Shankar', 'Janu'];
+        
+        // State to keep track of each person's timer
+        const state = {};
+        users.forEach(user => {
+            state[user] = {
+                active: false,
+                secondsElapsed: 0,
+                intervalId: null
+            };
+        });
+
+        // Icons for Check In and Check Out
+        const checkInIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-in h-4 w-4" aria-hidden="true"><path d="m10 17 5-5-5-5"></path><path d="M15 12H3"></path><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path></svg>`;
+        const checkOutIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-log-out h-4 w-4" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" x2="9" y1="12" y2="12"></line></svg>`;
+
+        const container = document.getElementById('tracker-container');
+
+        function renderCards() {
+            container.innerHTML = ''; // Clear container
+            users.forEach(user => {
+                // Wrapper card for individual user
+                const card = document.createElement('div');
+                card.className = 'bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col';
+                
+                // Header with name
+                const header = document.createElement('div');
+                header.className = 'px-4 py-3 border-b border-border bg-gray-50/50';
+                header.innerHTML = `<h2 class="font-semibold text-card-foreground text-lg">${user}</h2>`;
+                
+                // The requested component structure injected below the name
+                const content = document.createElement('div');
+                content.innerHTML = `
+                <div class="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div>
+                        <p class="text-xs font-medium text-muted-foreground">Today's study time</p>
+                        <p class="text-2xl font-semibold tabular-nums" id="time-${user}">0m</p>
+                    </div>
+                    <button id="btn-${user}" onclick="toggleTimer('${user}')" class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 cursor-pointer bg-primary text-primary-foreground hover:opacity-90 h-9 px-4 py-2 gap-1.5">
+                        ${checkInIcon} Check In
+                    </button>
+                </div>
+                `;
+                
+                card.appendChild(header);
+                card.appendChild(content);
+                container.appendChild(card);
+            });
+        }
+
+        function formatTime(totalSeconds) {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            if (hours > 0) return `${hours}h ${minutes}m`;
+            if (minutes > 0) return `${minutes}m ${seconds}s`;
+            return `${seconds}s`; // Show seconds initially so it's clearly live
+        }
+
+        function updateTimeDisplay(user) {
+            const timeEl = document.getElementById(`time-${user}`);
+            if (timeEl) {
+                timeEl.textContent = formatTime(state[user].secondsElapsed);
+            }
+        }
+
+        window.toggleTimer = function(user) {
+            const btn = document.getElementById(`btn-${user}`);
+            const userState = state[user];
+
+            if (userState.active) {
+                // Check Out Action
+                clearInterval(userState.intervalId);
+                userState.active = false;
+                
+                // Update Button UI
+                btn.innerHTML = `${checkInIcon} Check In`;
+                btn.classList.remove('bg-red-600', 'text-white', 'hover:bg-red-700');
+                btn.classList.add('bg-primary', 'text-primary-foreground', 'hover:opacity-90');
+
+                // Trigger sync to Google Sheets
+                syncToGoogleSheets(user, userState.secondsElapsed);
+                console.log(`${user} checked out. Total time: ${formatTime(userState.secondsElapsed)}`);
+            } else {
+                // Check In Action
+                userState.active = true;
+                
+                // Update Button UI
+                btn.innerHTML = `${checkOutIcon} Check Out`;
+                btn.classList.remove('bg-primary', 'text-primary-foreground', 'hover:opacity-90');
+                btn.classList.add('bg-red-600', 'text-white', 'hover:bg-red-700'); // distinct style for active tracking
+
+                // Start Timer
+                userState.intervalId = setInterval(() => {
+                    userState.secondsElapsed++;
+                    updateTimeDisplay(user);
+                }, 1000);
+                
+                console.log(`${user} checked in.`);
+            }
+        }
+
+        
+        // ==========================================
+        // GOOGLE SHEETS API INTEGRATION BOILERPLATE
+        // ==========================================
+        
+        // TODO: Replace these placeholders with your real credentials
+        // 1. Create a project in Google Cloud Console
+        // 2. Enable Google Sheets API
+        // 3. Create OAuth 2.0 Client ID (Web application) & API Key
+        const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
+        const API_KEY = 'YOUR_API_KEY';
+        const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID'; // The ID in your Google Sheet URL
+        
+        // Scopes required to edit sheets
+        const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+        
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        // Called to initialize the API clients
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            try {
+                // Initialize gapi client with API key and discovery doc
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+                });
+                gapiInited = true;
+                console.log("GAPI initialized");
+            } catch (err) {
+                console.warn("GAPI Init Error (Expected if API_KEY is placeholder):", err);
+            }
+        }
+
+        function gisLoaded() {
+            try {
+                // Initialize the token client using the client ID
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse.error !== undefined) {
+                            throw (tokenResponse);
+                        }
+                        document.getElementById('auth-status').classList.remove('hidden');
+                        document.getElementById('auth-button').textContent = "Authenticated";
+                        document.getElementById('auth-button').disabled = true;
+                        document.getElementById('auth-button').classList.add('opacity-50');
+                    },
+                });
+                gisInited = true;
+                console.log("GIS initialized");
+            } catch(err) {
+                console.warn("GIS Init Error (Expected if CLIENT_ID is placeholder):", err);
+            }
+        }
+
+        // Setup Auth Button Listener
+        document.getElementById('auth-button').addEventListener('click', () => {
+            if (gisInited) {
+                tokenClient.requestAccessToken({prompt: 'consent'});
+            } else {
+                alert("Please configure CLIENT_ID and API_KEY in the script first.");
+            }
+        });
+
+        // Function called when a user checks out
+        async function syncToGoogleSheets(userName, totalSeconds) {
+            // Calculate format, e.g., hours/mins to save
+            const minutes = (totalSeconds / 60).toFixed(2);
+            const date = new Date().toLocaleDateString();
+            const time = new Date().toLocaleTimeString();
+
+            console.log(`[MOCK API] Saving ${minutes} minutes for ${userName} to Google Sheets...`);
+            
+            // IF APIs are initialized and user is authenticated, actually call it:
+            if (gapiInited && gapi.client.getToken() !== null) {
+                try {
+                    // Assuming you have a sheet with columns: Date, Time, Name, Duration(Mins)
+                    const response = await gapi.client.sheets.spreadsheets.values.append({
+                        spreadsheetId: SPREADSHEET_ID,
+                        range: 'Sheet1!A:D', // Update with your actual sheet name/range
+                        valueInputOption: 'USER_ENTERED',
+                        resource: {
+                            values: [
+                                [date, time, userName, minutes]
+                            ]
+                        }
+                    });
+                    console.log('Successfully saved to Sheets!', response);
+                } catch (err) {
+                    console.error('Error saving to Sheets:', err);
+                }
+            } else {
+                console.log("Authentication required or API keys missing. Data not sent to Google Sheets.");
+            }
+        }
+
+        // Initialize UI
+        renderCards();
+        
+        // Manual loading checks for Google APIs (since scripts are loaded async/defer)
+        window.onload = () => {
+            if (window.gapi) gapiLoaded();
+            if (window.google) gisLoaded();
+        }
+    </script>
+</body>
+</html>
